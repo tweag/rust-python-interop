@@ -1,131 +1,15 @@
-use std::{future::Future, pin::Pin, sync::Arc, task::Poll};
+use std::{pin::Pin, sync::Arc};
 
-use async_std::{path::Iter, task};
-use async_stream::{stream, try_stream};
-use pyo3::{
-    exceptions::{PyException, PyValueError},
-    prelude::*,
-    types::{PyDateTime, PyString},
-};
-use serde::Deserialize;
-use tokio::{sync::Mutex, time::Duration};
+use cats::*;
+use fibonacci::*;
+use pyo3::{exceptions::*, prelude::*, types::*};
+use struct_iterator::*;
+use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 
-#[pyclass]
-struct FooStruct {
-    #[pyo3(get)]
-    msg: String,
-    #[pyo3(get)]
-    time: Py<PyDateTime>,
-}
-
-struct FibonacciIterator {
-    curr: usize,
-    next: usize,
-    sleep: Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync>>,
-}
-
-impl FibonacciIterator {
-    fn new() -> Self {
-        Self {
-            curr: 0,
-            next: 1,
-            sleep: Box::pin(task::sleep(Duration::from_millis(100))),
-        }
-    }
-}
-
-impl Iterator for FibonacciIterator {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.curr;
-        self.curr = self.next;
-        self.next += result;
-
-        Some(result)
-    }
-}
-
-impl Stream for FibonacciIterator {
-    type Item = usize;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        match Pin::new(&mut self.sleep).poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(_) => {
-                self.sleep = Box::pin(task::sleep(Duration::from_millis(50)));
-
-                let result = self.curr;
-                self.curr = self.next;
-                self.next += result;
-
-                Poll::Ready(Some(result))
-            }
-        }
-    }
-}
-
-enum WebIteratorState {
-    Init,
-    Fetching,
-    Finished,
-}
-
-struct CatIterator {
-    state: WebIteratorState,
-}
-
-impl CatIterator {
-    fn new() -> Self {
-        Self {
-            state: WebIteratorState::Init,
-        }
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct Cat {
-    url: String,
-}
-
-fn stream_cats() -> impl Stream<Item = String> {
-    stream! {
-        loop {
-            let cats: Vec<Cat> = reqwest::get("https://api.thecatapi.com/v1/images/search?limit=4").await.unwrap().json().await.unwrap();
-
-            for cat in cats {
-                yield cat.url;
-            }
-        }
-    }
-}
-
-struct StructIterator {}
-
-impl StructIterator {
-    fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Iterator for StructIterator {
-    type Item = FooStruct;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Python::with_gil(|py| {
-            Some(FooStruct {
-                msg: "Hello".to_string(),
-                time: PyDateTime::new(py, 1999, 12, 12, 1, 1, 1, 1, None)
-                    .unwrap()
-                    .into(),
-            })
-        })
-    }
-}
+mod cats;
+mod fibonacci;
+mod struct_iterator;
 
 /// Contains any iterator of usize values.
 /// Send is required by Pyo3.
@@ -212,7 +96,7 @@ impl IntoPy<Py<PyAny>> for IteratorResult<String> {
         match self.0 {
             Ok(val) => PyString::new(py, &val).into(),
             Err(e) => {
-                let err = PyErr::new::<PyException, _>(format!("{:?}", e));
+                let err = PyErr::new::<PyException, _>(format!("{e:?}"));
                 err.into_py(py)
             }
         }

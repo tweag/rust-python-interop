@@ -1,0 +1,20 @@
+[package]
+name = "python-async-iterator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "python_async_iterator"
+crate-type = ["cdylib"]
+
+[dependencies]
+async-std = "1.12.0"
+async-stream = "0.3.5"
+futures = "0.3.28"
+pyo3 = "0.18.1"
+pyo3-asyncio = { version = "0.18.0", features = ["tokio-runtime"] }
+reqwest = { version = "0.11.18", features = ["json"] }
+serde = { version = "1.0.163", features = ["derive"] }
+tokio = "1.28.1"
+tokio-stream = "0.1.14"

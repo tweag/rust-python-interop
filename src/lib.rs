@@ -2,7 +2,7 @@ use std::{pin::Pin, sync::Arc};
 
 use cats::*;
 use fibonacci::*;
-use pyo3::{exceptions::*, prelude::*, types::*};
+use pyo3::prelude::*;
 use struct_iterator::*;
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
@@ -74,41 +74,6 @@ impl NumberIteratorAsync {
     }
 }
 
-#[derive(Debug)]
-struct IteratorError(reqwest::Error);
-
-struct IteratorResult<T>(Result<T, IteratorError>);
-
-impl From<IteratorError> for PyErr {
-    fn from(error: IteratorError) -> Self {
-        PyValueError::new_err(error.0.to_string())
-    }
-}
-
-impl From<reqwest::Error> for IteratorError {
-    fn from(other: reqwest::Error) -> Self {
-        Self(other)
-    }
-}
-
-impl IntoPy<Py<PyAny>> for IteratorResult<String> {
-    fn into_py(self, py: Python) -> Py<PyAny> {
-        match self.0 {
-            Ok(val) => PyString::new(py, &val).into(),
-            Err(e) => {
-                let err = PyErr::new::<PyException, _>(format!("{e:?}"));
-                err.into_py(py)
-            }
-        }
-    }
-}
-
-impl<T> From<Result<T, IteratorError>> for IteratorResult<T> {
-    fn from(value: Result<T, IteratorError>) -> Self {
-        IteratorResult(value)
-    }
-}
-
 #[pyclass]
 struct StringIteratorAsync {
     iter: Arc<Mutex<Pin<Box<dyn Stream<Item = String> + Send + Sync>>>>,
@@ -116,6 +81,28 @@ struct StringIteratorAsync {
 
 #[pymethods]
 impl StringIteratorAsync {
+    fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __anext__<'a>(slf: PyRefMut<'_, Self>, py: Python<'a>) -> PyResult<Option<&'a PyAny>> {
+        let iter = Arc::clone(&slf.iter);
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut iter = iter.lock().await;
+            Ok(iter.next().await)
+        })
+        .map(Some)
+    }
+}
+
+#[pyclass]
+struct StringResultIteratorAsync {
+    iter: Arc<Mutex<Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync>>>>,
+}
+
+#[pymethods]
+impl StringResultIteratorAsync {
     fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
@@ -153,7 +140,7 @@ fn struct_sync() -> StructIteratorSync {
 }
 
 #[pyfunction]
-fn cat_async() -> StringIteratorAsync {
+fn cats_async() -> StringIteratorAsync {
     // let pinned_stream: Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>> =
     //     Box::<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>::pin(
     //         stream_cats().into(),
@@ -166,13 +153,28 @@ fn cat_async() -> StringIteratorAsync {
     }
 }
 
+#[pyfunction]
+fn cats_with_error_async() -> StringResultIteratorAsync {
+    // let pinned_stream: Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>> =
+    //     Box::<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>::pin(
+    //         stream_cats().into(),
+    //     );
+
+    let pinned_stream = Box::pin(stream_cats_with_error());
+
+    StringResultIteratorAsync {
+        iter: Arc::new(Mutex::new(pinned_stream)),
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn python_async_iterator(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fibonacci_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fibonacci_async, m)?)?;
     m.add_function(wrap_pyfunction!(struct_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(cat_async, m)?)?;
+    m.add_function(wrap_pyfunction!(cats_async, m)?)?;
+    m.add_function(wrap_pyfunction!(cats_with_error_async, m)?)?;
     m.add_class::<NumberIteratorSync>()?;
     m.add_class::<NumberIteratorAsync>()?;
     m.add_class::<StructIteratorSync>()?;

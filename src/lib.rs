@@ -150,29 +150,15 @@ fn struct_sync() -> StructIteratorSync {
 
 #[pyfunction]
 fn cats_async() -> StringIteratorAsync {
-    // let pinned_stream: Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>> =
-    //     Box::<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>::pin(
-    //         stream_cats().into(),
-    //     );
-
-    let pinned_stream = Box::pin(stream_cats());
-
     StringIteratorAsync {
-        iter: Arc::new(Mutex::new(pinned_stream)),
+        iter: Arc::new(Mutex::new(Box::pin(stream_cats()))),
     }
 }
 
 #[pyfunction]
 fn cats_with_error_async() -> StringResultIteratorAsync {
-    // let pinned_stream: Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>> =
-    //     Box::<dyn Stream<Item = IteratorResult<String>> + Send + Sync + 'static>::pin(
-    //         stream_cats().into(),
-    //     );
-
-    let pinned_stream = Box::pin(stream_cats_with_error());
-
     StringResultIteratorAsync {
-        iter: Arc::new(Mutex::new(pinned_stream)),
+        iter: Arc::new(Mutex::new(Box::pin(stream_cats_with_error()))),
     }
 }
 

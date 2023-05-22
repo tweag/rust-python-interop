@@ -1,8 +1,8 @@
-use std::{pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use cats::*;
 use fibonacci::*;
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyDateTime};
 use struct_iterator::*;
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
@@ -10,6 +10,47 @@ use tokio_stream::{Stream, StreamExt};
 mod cats;
 mod fibonacci;
 mod struct_iterator;
+
+#[pyclass]
+struct SomeData {
+    num: usize,
+    msg: String,
+    timestamp: f64,
+    dict: HashMap<bool, usize>,
+}
+
+#[pyfunction]
+fn get_data() -> SomeData {
+    SomeData {
+        num: 2,
+        msg: "Hello".to_string(),
+        timestamp: 1524885322.0,
+        dict: HashMap::from([(false, 2), (true, 4)]),
+    }
+}
+
+#[pymethods]
+impl SomeData {
+    #[getter]
+    fn num(&self) -> usize {
+        self.num
+    }
+
+    #[getter]
+    fn msg(&self) -> &str {
+        &self.msg
+    }
+
+    #[getter]
+    fn date<'a>(&'a self, py: Python<'a>) -> PyResult<&'a PyDateTime> {
+        PyDateTime::from_timestamp(py, self.timestamp, None)
+    }
+
+    #[getter]
+    fn dict(&self) -> HashMap<bool, usize> {
+        self.dict.clone()
+    }
+}
 
 /// Contains any iterator of usize values.
 /// Send is required by Pyo3.
@@ -165,6 +206,7 @@ fn cats_with_error_async() -> StringResultIteratorAsync {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn python_async_iterator(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(get_data, m)?)?;
     m.add_function(wrap_pyfunction!(fibonacci_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fibonacci_async, m)?)?;
     m.add_function(wrap_pyfunction!(struct_sync, m)?)?;

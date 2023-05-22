@@ -1,7 +1,15 @@
 import aioitertools
 import asyncio
 import itertools
-from python_async_iterator import fibonacci_sync, fibonacci_async, struct_sync, cats_async, cats_with_error_async
+from python_async_iterator import get_data, fibonacci_sync, fibonacci_async, struct_sync, cats_async, cats_with_error_async
+
+def get_some_data():
+    print("Read some data from Rust:")
+    data = get_data()
+    print(f'A number: {data.num}')
+    print(f'A string: {data.msg}')
+    print(f'A datetime: {data.date}')
+    print(f'A dictionary: {data.dict}')
 
 def run_sync():
     print("Sync iterator:")
@@ -41,6 +49,7 @@ async def run_cats_with_error_async():
     except Exception as e:
         print(f'Python caught an exception: {e}')
 
+get_some_data()
 run_sync()
 run_struct_sync()
 asyncio.run(run_async())

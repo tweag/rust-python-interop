@@ -21,7 +21,8 @@ pub(crate) fn stream_cats() -> impl Stream<Item = String> {
 pub(crate) fn stream_cats_with_error() -> impl Stream<Item = Result<String, reqwest::Error>> {
     stream! {
         loop {
-            let cats = get_cats().await;
+            // This will intentionally fail
+            let cats: Result<Vec<Cat>, reqwest::Error> = reqwest::get("foo://bar").await?.json().await;
 
             match cats {
                 Ok(cats) => {
@@ -35,10 +36,4 @@ pub(crate) fn stream_cats_with_error() -> impl Stream<Item = Result<String, reqw
             }
         }
     }
-}
-
-async fn get_cats() -> Result<Vec<Cat>, reqwest::Error> {
-    let cats: Vec<Cat> = reqwest::get("xhttp://foo").await?.json().await?;
-
-    Ok(cats)
 }

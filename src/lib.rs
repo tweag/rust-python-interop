@@ -98,7 +98,7 @@ impl StringIteratorAsync {
 
 #[pyclass]
 struct StringResultIteratorAsync {
-    iter: Arc<Mutex<Pin<Box<dyn Stream<Item = IteratorResult<String>> + Send + Sync>>>>,
+    iter: Arc<Mutex<Pin<Box<dyn Stream<Item = Result<String, reqwest::Error>> + Send + Sync>>>>,
 }
 
 #[pymethods]
@@ -112,7 +112,16 @@ impl StringResultIteratorAsync {
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let mut iter = iter.lock().await;
-            Ok(iter.next().await)
+            let next = iter.next().await;
+
+            match next {
+                Some(Ok(s)) => Ok(s),
+                Some(Err(e)) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                    "Error: {}",
+                    e
+                ))),
+                None => Err(PyErr::new::<pyo3::exceptions::PyStopIteration, _>("")),
+            }
         })
         .map(Some)
     }
